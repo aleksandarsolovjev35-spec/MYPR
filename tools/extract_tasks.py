@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Вырезает из сканов учебника (Part1.pdf, Part2.pdf) страницы с заданиями
+"""Вырезает из сканов учебника (Учебник_сканы/Part1.pdf, Part2.pdf) страницы с заданиями
 практических занятий РАЗДЕЛА II и сохраняет их в папку «Задания_учебника».
 
 Разворот скана содержит две книжные страницы:
@@ -15,6 +15,7 @@ import os
 import pymupdf
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SCANS = os.path.join(ROOT, "Учебник_сканы")
 OUT = os.path.join(ROOT, "Задания_учебника")
 PREVIEW = os.path.join(OUT, "Превью_PNG")
 
@@ -50,7 +51,7 @@ def clip_rect(page, left: bool) -> pymupdf.Rect:
 def main():
     os.makedirs(OUT, exist_ok=True)
     os.makedirs(PREVIEW, exist_ok=True)
-    src = {name: pymupdf.open(os.path.join(ROOT, name)) for name in ("Part1.pdf", "Part2.pdf")}
+    src = {name: pymupdf.open(os.path.join(SCANS, name)) for name in ("Part1.pdf", "Part2.pdf")}
 
     everything = pymupdf.open()
     for fname, title, pages in WORKS:
