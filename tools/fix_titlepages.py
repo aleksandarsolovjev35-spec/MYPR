@@ -52,6 +52,12 @@ def main():
                 set_text(p, "Год выполнения: %s" % YEAR)
                 changed.append("дата проведения → год выполнения")
                 break
+            if t.startswith("Год выполнения"):
+                # строка уже есть — проверяем, что год верный
+                if YEAR not in t:
+                    set_text(p, "Год выполнения: %s" % YEAR)
+                    changed.append("год выполнения исправлен")
+                break
         else:
             # год на титуле отсутствует — добавляем после строки «Киноматериал»
             for p in head:

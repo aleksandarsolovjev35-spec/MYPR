@@ -6,7 +6,10 @@
 включительно), остальное тело заменяется содержимым Markdown-файла.
 Оформление: Times New Roman 14 пт, полуторный интервал, абзацный отступ 1,25 см,
 выравнивание по ширине; таблицы — 10 пт с заливкой шапки; рисунки — по центру
-с подписью.
+с подписью. Разрывы страниц — перед разделами с рисунками, перед «Списком
+использованных источников» и перед приложениями. Поля 3,0/1,5/2,0/2,0 см,
+номер страницы не выводится на титульном листе. Длинные тире и многоточия
+заменяются на дефис и троеточие во всём документе, включая титульный лист.
 """
 
 import os
@@ -68,7 +71,10 @@ def parse_blocks(md):
         if not s:
             i += 1
             continue
-        if s.startswith("### "):
+        if s.startswith("#### "):
+            blocks.append(("h4", s[5:].strip()))
+            i += 1
+        elif s.startswith("### "):
             blocks.append(("h3", s[4:].strip()))
             i += 1
         elif s.startswith("## "):
@@ -157,21 +163,23 @@ def add_runs(p, chunks, size=BODY_SZ, bold_all=False):
         for extra in parts[1:]:
             r.add_break()
             r.add_text(extra)
-        r.font.name = "Courier New" if code else FONT
+        r.font.name = FONT
         r._element.rPr.rFonts.set(qn("w:eastAsia"), r.font.name)
         r.font.size = Pt(size)
         r.bold = bool(b or bold_all)
-        r.italic = bool(i)
+        r.italic = bool(i or code)
 
 
 def body_paragraph(doc, text, indent=True, align=WD_ALIGN_PARAGRAPH.JUSTIFY,
-                   left=None, hanging=None, size=BODY_SZ, style=None):
-    p = doc.add_paragraph(style=style)
+                   left=None, hanging=None, size=BODY_SZ):
+    p = doc.add_paragraph()
     if PROFILE == "B":
-        set_spacing(p, line=324 if style else 360,
-                    after=40 if style else 80)
-        if style is None:
+        set_spacing(p, line=360, after=80)
+        if left is not None or hanging is not None:
+            set_ind(p, left=left, hanging=hanging)
+        else:
             set_ind(p, first_line=INDENT)
+        p.alignment = align
         add_runs(p, parse_inline(text), size=size)
         return p
     set_spacing(p)
@@ -284,7 +292,7 @@ def add_table(doc, header, rows):
             if PROFILE == "B":
                 set_spacing(p, line=240, after=0)
                 set_ind(p, first_line=0)
-                add_runs(p, parse_inline(value), size=9, bold_all=head)
+                add_runs(p, parse_inline(value), size=TABLE_SZ, bold_all=head)
                 continue
             set_spacing(p, line=240, after=0)
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER if head else WD_ALIGN_PARAGRAPH.LEFT
@@ -310,6 +318,7 @@ def add_table(doc, header, rows):
 def add_picture(doc, path):
     p = doc.add_paragraph()
     pPr = p._p.get_or_add_pPr()
+    pPr.append(OxmlElement("w:keepNext"))
     pPr.append(OxmlElement("w:keepLines"))
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = p.add_run()
@@ -352,6 +361,52 @@ def clear_after_title(doc):
         body.remove(k)
 
 
+def normalize_layout(doc):
+    """Приводит оформление к требованиям отчёта.
+
+    Поля: левое 3,0 см, правое 1,5 см, верхнее и нижнее по 2,0 см.
+    Номер страницы не выводится на титульном листе (titlePg).
+    Шрифт номера страницы — Times New Roman 12 пт.
+    """
+    sec = doc.sections[0]
+    sec.left_margin = Twips(1701)
+    sec.right_margin = Twips(850)
+    sec.top_margin = Twips(1134)
+    sec.bottom_margin = Twips(1134)
+    sec.different_first_page_header_footer = True
+    for ftr in (sec.footer, sec.first_page_footer, sec.even_page_footer):
+        for p in ftr.paragraphs:
+            for r in p.runs:
+                r.font.name = FONT
+                r.font.size = Pt(12)
+
+
+def sweep_dashes(doc):
+    """Убирает длинные тире и многоточия во всём документе, включая титул.
+
+    Тело отчёта приходит из .md уже нормализованным; титульный лист
+    сохраняется из исходного файла, поэтому здесь он подчищается отдельно.
+    """
+    from docx.text.paragraph import Paragraph
+
+    for p_el in doc.element.body.iter(qn("w:p")):
+        p = Paragraph(p_el, doc)
+        if "—" not in p.text and "…" not in p.text:
+            continue
+        for r in p.runs:
+            if "—" in r.text:
+                r.text = r.text.replace(" — ", " - ")
+            if "…" in r.text:
+                r.text = r.text.replace("…", "...")
+        if "—" in p.text or "…" in p.text:
+            # тире разбито между run'ами — склеиваем параграф
+            text = p.text.replace(" — ", " - ").replace("…", "...")
+            if p.runs:
+                p.runs[0].text = text
+                for r in p.runs[1:]:
+                    r.text = ""
+
+
 def render(md_path, docx_path, out_path=None):
     md = open(md_path, encoding="utf-8").read()
     base = os.path.dirname(os.path.abspath(md_path))
@@ -370,13 +425,16 @@ def render(md_path, docx_path, out_path=None):
     for i, (kind, _) in enumerate(blocks):
         if kind == "img":
             for j in range(i, -1, -1):
-                if blocks[j][0] in ("h2", "h3"):
+                if blocks[j][0] in ("h2", "h3", "h4"):
                     img_sections.add(j)
                     break
 
     for i, (kind, payload) in enumerate(blocks):
-        if kind in ("h2", "h3"):
-            if i in img_sections or payload.startswith("Приложение"):
+        if kind in ("h2", "h3", "h4"):
+            # новые страницы: перед рисунком, перед списком источников,
+            # перед приложением
+            if (i in img_sections or payload.startswith("Приложение")
+                    or "Список использованных источников" in payload):
                 page_break(doc)
             heading(doc, payload, 1 if kind == "h2" else 2)
         elif kind == "p":
@@ -390,28 +448,23 @@ def render(md_path, docx_path, out_path=None):
                 add_runs(p, parse_inline(q))
         elif kind == "ul":
             for item in payload:
-                if PROFILE == "B":
-                    body_paragraph(doc, item, style="List Bullet")
-                else:
-                    body_paragraph(doc, "• " + item, left=INDENT, hanging=312)
+                body_paragraph(doc, "• " + item, left=INDENT, hanging=312)
         elif kind == "ol":
             for item in payload:
-                if PROFILE == "B":
-                    body_paragraph(doc, re.sub(r"^\d+\. ", "", item),
-                                   style="List Number")
-                else:
-                    body_paragraph(doc, item, left=INDENT, hanging=369)
+                body_paragraph(doc, item, left=INDENT, hanging=369)
         elif kind == "table":
             add_table(doc, payload[0], payload[1])
         elif kind == "img":
             add_picture(doc, os.path.join(base, payload))
             nxt = blocks[i + 1] if i + 1 < len(blocks) else None
-            if nxt and nxt[0] == "p" and nxt[1].startswith("**Рисунок"):
+            if nxt and nxt[0] == "p" and re.match(r"\*{1,2}Рисунок", nxt[1]):
                 add_caption(doc, nxt[1])
                 blocks[i + 1] = ("skip", "")
         elif kind == "skip":
             continue
 
+    sweep_dashes(doc)
+    normalize_layout(doc)
     doc.save(out_path or docx_path)
 
 
