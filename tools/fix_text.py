@@ -36,9 +36,11 @@ def main():
         out = out.replace("…", "...")
         out = out.replace("„", "«").replace("“", "»")
         if path.endswith("ПЗ-01.md"):
-            out = out.replace(
-                "*Рисунок 1 - Дерево решений по выбранному направлению изменений*",
+            out = re.sub(
+                r"^\*+Рисунок 1 - Дерево решений по выбранному направлению изменений\*+$",
                 "**Рисунок 1 - Дерево решений по выбранному направлению изменений**",
+                out,
+                flags=re.M,
             )
         if out != src:
             open(path, "w", encoding="utf-8").write(out)
