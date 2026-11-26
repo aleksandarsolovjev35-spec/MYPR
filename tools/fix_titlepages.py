@@ -35,7 +35,7 @@ def set_text(par, text):
 
 
 def main():
-    for path in sorted(glob.glob(os.path.join(ROOT, "П-41*.docx"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "**", "П-41*.docx"), recursive=True)):
         doc = docx.Document(path)
         changed = []
         pars = list(paragraphs(doc))

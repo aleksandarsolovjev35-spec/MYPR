@@ -13,7 +13,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def main():
-    paths = sys.argv[1:] or sorted(glob.glob(os.path.join(ROOT, "П-41*.docx")))
+    paths = sys.argv[1:] or sorted(glob.glob(os.path.join(ROOT, "**", "П-41*.docx"), recursive=True))
     for path in paths:
         doc = docx.Document(path)
         body = doc.element.body
