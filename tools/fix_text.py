@@ -30,7 +30,7 @@ def fix_line(line):
 
 
 def main():
-    for path in sorted(glob.glob(os.path.join(ROOT, "П-41*.md"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "**", "П-41*.md"), recursive=True)):
         src = open(path, encoding="utf-8").read()
         out = "\n".join(fix_line(ln) for ln in src.split("\n"))
         out = out.replace("…", "...")

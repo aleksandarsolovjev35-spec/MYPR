@@ -44,7 +44,7 @@ def full_text(doc):
 
 
 def main():
-    for path in sorted(glob.glob(os.path.join(ROOT, "П-41*.docx"))):
+    for path in sorted(glob.glob(os.path.join(ROOT, "**", "П-41*.docx"), recursive=True)):
         name = os.path.basename(path)
         doc = docx.Document(path)
         print(f"== {name}")
