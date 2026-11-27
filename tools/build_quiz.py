@@ -13,15 +13,11 @@ OUT = OUT_DIR / "index.html"
 
 def parse_items():
     items = []
-    seminar = None
     for line in SRC.read_text(encoding="utf-8").splitlines():
-        m = re.match(r"^## Семинар (\d+)", line)
+        m = re.match(r"^- \*\*(.+?)\*\* - (.+?)\s*\*\(семинары: ([\d, ]+)\)\*\s*$", line)
         if m:
-            seminar = int(m.group(1))
-            continue
-        m = re.match(r"^- \*\*(.+?)\*\* - (.+?)\.?\s*$", line)
-        if m and seminar is not None:
-            items.append({"s": seminar, "t": m.group(1).strip(), "e": m.group(2).strip()})
+            sems = [int(x) for x in m.group(3).split(",")]
+            items.append({"t": m.group(1).strip(), "e": m.group(2).strip(), "sems": sems})
     return items
 
 
@@ -96,7 +92,7 @@ HTML = """<!DOCTYPE html>
       <div class="prompt">Выберите набор:</div>
       <div class="grid" id="sets"></div>
     </div>
-    <p class="foot">Источник: Список_терминов.md (перечни из заданий семинаров 1-8)</p>
+    <p class="foot">Источник: Список_терминов.md (уникальные термины перечней заданий семинаров 1-8)</p>
   </section>
 
   <!-- Квиз -->
@@ -141,8 +137,10 @@ function show(name) {
 
 function buildMenu() {
   $("total").textContent = DATA.length;
-  const sets = [["Все термины", 0]];
-  for (let s = 1; s <= 8; s++) sets.push(["Семинар " + s, s]);
+  const sets = [["Все термины (" + DATA.length + ")", 0]];
+  for (let s = 1; s <= 8; s++) {
+    sets.push(["Семинар " + s + " (" + DATA.filter(i => i.sems.includes(s)).length + ")", s]);
+  }
   $("sets").innerHTML = sets.map(([label, s]) =>
     `<button class="btn ghost" data-sem="${s}">${label}</button>`).join("");
   for (const b of document.querySelectorAll("#sets .btn")) {
@@ -151,17 +149,17 @@ function buildMenu() {
 }
 
 function start(sem) {
-  order = shuffle(sem ? DATA.filter(i => i.s === sem) : DATA.slice());
+  order = shuffle(sem ? DATA.filter(i => i.sems.includes(sem)) : DATA.slice());
   idx = 0; score = 0; wrong = []; locked = false;
   show("quiz");
   render();
 }
 
 function distractors(item) {
-  const same = shuffle(DATA.filter(i => i.t !== item.t && i.s === item.s));
+  const same = shuffle(DATA.filter(i => i.t !== item.t && i.sems.some(s => item.sems.includes(s))));
   const picked = same.slice(0, 3);
   if (picked.length < 3) {
-    picked.push(...shuffle(DATA.filter(i => i.t !== item.t && i.s !== item.s)).slice(0, 3 - picked.length));
+    picked.push(...shuffle(DATA.filter(i => i.t !== item.t && !i.sems.some(s => item.sems.includes(s)))).slice(0, 3 - picked.length));
   }
   return picked;
 }
@@ -170,7 +168,7 @@ function render() {
   clearTimeout(autoTimer);
   const item = order[idx];
   locked = false;
-  $("sem").textContent = "Семинар " + item.s;
+  $("sem").textContent = "Семинары: " + item.sems.join(", ");
   $("term").textContent = item.t;
   $("qnum").textContent = "Вопрос " + (idx + 1) + " из " + order.length;
   $("snum").textContent = "Верно: " + score;
@@ -263,11 +261,9 @@ def main():
     OUT_DIR.mkdir(exist_ok=True)
     html = HTML.replace("__DATA_JSON__", json.dumps(items, ensure_ascii=False))
     OUT.write_text(html, encoding="utf-8")
-    counts = {}
-    for it in items:
-        counts[it["s"]] = counts.get(it["s"], 0) + 1
-    print(f"Собрано терминов: {len(items)}")
-    print("По семинарам:", ", ".join(f"С{s}:{counts[s]}" for s in sorted(counts)))
+    counts = {s: sum(1 for it in items if s in it["sems"]) for s in range(1, 9)}
+    print(f"Собрано уникальных терминов: {len(items)}")
+    print("Требуется по семинарам:", ", ".join(f"С{s}:{counts[s]}" for s in sorted(counts)))
     print("Файл:", OUT)
 
 
